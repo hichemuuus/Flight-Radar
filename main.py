@@ -27,7 +27,7 @@ TTL = 60
 
 
 async def fetch_flights():
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         auth = ("hichem00001", "Hichem4real")
         r = await client.get(
             "https://opensky-network.org/api/states/all",
