@@ -371,14 +371,24 @@ function applyFilters() {
  // --- LOAD FLIGHTS ---
 async function loadFlights() {
   try {
-     const response = await fetch('https://opensky-network.org/api/states/all')
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
+    const response = await fetch('https://opensky-network.org/api/states/all')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
     const data = await response.json()
 
-    allFlights = data.flights
+    allFlights = (data.states || [])
+      .filter(p => p[5] !== null && p[6] !== null)
+      .map(p => ({
+        icao:      p[0],
+        callsign:  p[1] ? p[1].trim() : 'N/A',
+        country:   p[2],
+        lon:       p[5],
+        lat:       p[6],
+        altitude:  p[7] || 0,
+        on_ground: p[8],
+        speed:     p[9] ? Math.round(p[9] * 3.6) : 0,
+        heading:   p[10] || 0,
+      }))
 
     updateStats(allFlights)
 
@@ -388,10 +398,8 @@ async function loadFlights() {
 
     // --- POPULATE COUNTRY FILTER ONCE ---
     const select = document.getElementById('filter-country')
-
     if (select.options.length === 1) {
       const countries = [...new Set(allFlights.map(p => p.country))].sort()
-
       countries.forEach(country => {
         const opt = document.createElement('option')
         opt.value = country
@@ -402,66 +410,43 @@ async function loadFlights() {
 
     // --- UPDATE / CREATE MARKERS ---
     allFlights.forEach(plane => {
-
       seenIcaos.add(plane.icao)
 
-      // UPDATE EXISTING MARKER
       if (markers[plane.icao]) {
-
         markers[plane.icao].setLatLng([plane.lat, plane.lon])
-
-        markers[plane.icao].setIcon(
-          makePlaneIcon(plane.heading, plane.altitude)
-        )
-
+        markers[plane.icao].setIcon(makePlaneIcon(plane.heading, plane.altitude))
       } else {
-
-        // CREATE NEW MARKER
         const marker = L.marker([plane.lat, plane.lon], {
           icon: makePlaneIcon(plane.heading, plane.altitude)
         }).on('click', () => openPanel(plane))
-
         markers[plane.icao] = marker
         toAdd.push(marker)
       }
     })
 
     // --- ADD NEW MARKERS ---
-    if (toAdd.length > 0) {
-      clusterGroup.addLayers(toAdd)
-    }
+    if (toAdd.length > 0) clusterGroup.addLayers(toAdd)
 
     // --- REMOVE OLD MARKERS ---
     Object.keys(markers).forEach(icao => {
-
       if (!seenIcaos.has(icao)) {
-
         toRemove.push(markers[icao])
-
         delete markers[icao]
       }
     })
-
-    if (toRemove.length > 0) {
-      clusterGroup.removeLayers(toRemove)
-    }
+    if (toRemove.length > 0) clusterGroup.removeLayers(toRemove)
 
     // --- APPLY ACTIVE FILTERS ---
     applyFilters()
 
     // --- UI UPDATES ---
     document.getElementById('count').textContent =
-      `${data.count.toLocaleString()} aircraft`
-
-    document.title =
-      `Flight Radar — ${data.count} flights`
+      `${allFlights.length.toLocaleString()} aircraft`
+    document.title = `Flight Radar — ${allFlights.length} flights`
 
   } catch (err) {
-
     console.error('Failed to load flights:', err)
-
-    document.getElementById('count').textContent =
-      '⚠ Backend offline'
+    document.getElementById('count').textContent = '⚠ Failed to load'
   }
 }
 // --- SIDE PANEL FUNCTIONS ---
