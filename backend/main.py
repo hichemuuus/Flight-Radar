@@ -23,7 +23,7 @@ app.add_middleware(
 
 cache = {"data": None, "timestamp": 0}
 lock = asyncio.Lock()
-TTL = 60
+TTL = 180
 
 
 async def fetch_flights():
