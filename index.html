@@ -371,7 +371,7 @@ function applyFilters() {
  // --- LOAD FLIGHTS ---
 async function loadFlights() {
   try {
-    const response = await fetch('http://127.0.0.1:8000/flights')
+     const response = await fetch('https://opensky-network.org/api/states/all')
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }

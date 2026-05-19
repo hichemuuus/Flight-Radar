@@ -27,16 +27,22 @@ TTL = 60
 
 
 async def fetch_flights():
-    async with httpx.AsyncClient(timeout=30) as client:
-        auth = ("hichem00001", "Hichem4real")
-        r = await client.get(
-            "https://opensky-network.org/api/states/all",
-            auth=auth
-        )
-        if r.status_code == 429:
-            return None  # Rate limited — on signale sans planter
-        r.raise_for_status()
-        return r.json()
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(
+                "https://opensky-network.org/api/states/all",
+                auth=(OPENSKY_USER, OPENSKY_PASS)
+            )
+            if r.status_code == 429:
+                return None
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectTimeout:
+        print("OpenSky connection timed out")
+        return None
+    except httpx.HTTPError as e:
+        print(f"HTTP error: {e}")
+        return None
 
 
 @app.get("/flights")
