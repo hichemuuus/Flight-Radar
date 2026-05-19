@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flight Radar</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; font-family: 'Courier New', monospace; }
+      #filters {
+    position: absolute;
+    top: 40px;
+    right: 5px;
+    z-index: 1000;
+
+
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(10px);
+
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+
+    padding: 10px 14px;
+
+    box-shadow:
+        0 4px 20px rgba(0,0,0,0.45),
+        0 0 10px rgba(255,170,0,0.08);
+
+    font-family: Arial, sans-serif;
+}
+#panel {
+  position: fixed;
+  top: 44px;
+  right: -320px;
+  bottom: 0;
+  width: 320px;
+  background: #0d0d18;
+  border-left: 1px solid #1a1a2e;
+  z-index: 999;
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+#panel.open { right: 0; }
+
+#panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #1a1a2e;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+#panel-callsign {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffd700;
+  letter-spacing: 0.1em;
+}
+
+#panel-icao {
+  font-size: 10px;
+  color: #444;
+  margin-top: 4px;
+  letter-spacing: 0.1em;
+}
+
+#panel-close {
+  background: none;
+  border: 1px solid #222;
+  color: #555;
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#panel-close:hover { border-color: #555; color: #ccc; }
+
+#panel-body { padding: 16px; }
+
+.panel-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #0f0f1a;
+}
+
+.panel-label {
+  font-size: 10px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.panel-value {
+  font-size: 12px;
+  color: #ccc;
+  font-weight: 500;
+}
+#filter-country {
+    background: transparent;
+    color: #f5f5f5;
+
+    border: none;
+    outline: none;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    cursor: pointer;
+
+    min-width: 180px;
+}
+
+/* dropdown options */
+#filter-country option {
+    background: #111;
+    color: white;
+}
+      #stats {
+      position: fixed;
+      top: 44px;
+      left: 0;
+      right: 0;
+      z-index: 999;
+      background: rgba(10,10,15,0.9);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #1a1a2e;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 24px;
+    }
+
+    #stats span {
+      font-size: 12px;
+      color: #555;
+      letter-spacing: 0.08em;
+    }
+
+    #header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      background: rgba(10,10,15,0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #222;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #header h1 { font-size: 13px; font-weight: 600; letter-spacing: 0.15em; color: #ccc; text-transform: uppercase; }
+    #clock { font-size: 12px; color: #888; letter-spacing: 0.1em; }
+    #count { font-size: 12px; color: #888; letter-spacing: 0.1em; }
+
+        #map {
+      position: fixed;
+      top: 80px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    .plane-icon { transform-origin: center; }
+
+    .custom-cluster {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      border: 2px solid rgba(255,255,255,0.15);
+    }
+
+    .leaflet-popup-content-wrapper {
+      background: #111;
+      border: 1px solid #333;
+      color: #eee;
+      border-radius: 6px;
+    }
+    .leaflet-popup-tip { background: #111; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>✈ Flight Radar</h1>
+  <span id="count">Loading...</span>
+  <span id="clock"></span>
+</div>
+<div id="stats">
+  <span id="stat-total">—</span>
+  <span id="stat-airborne">—</span>
+  <span id="stat-ground">—</span>
+  <span id="stat-countries">—</span>
+  <span id="stat-maxspeed">—</span>
+  <span id="stat-maxalt">—</span>
+</div>
+<div id="filters">
+  <select id="filter-country" onchange="applyFilters()">
+    <option value="">All Countries</option>
+  </select>
+</div>
+<div id="panel">
+  <div id="panel-header">
+    <div>
+      <div id="panel-callsign">—</div>
+      <div id="panel-icao">—</div>
+    </div>
+    <button id="panel-close" onclick="closePanel()">✕</button>
+  </div>
+  <div id="panel-body">
+    <div class="panel-row">
+      <span class="panel-label">Country</span>
+      <span class="panel-value" id="p-country">—</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Altitude</span>
+      <span class="panel-value" id="p-altitude">—</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Speed</span>
+      <span class="panel-value" id="p-speed">—</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Heading</span>
+      <span class="panel-value" id="p-heading">—</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Status</span>
+      <span class="panel-value" id="p-status">—</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Latitude</span>
+      <span class="panel-value" id="p-lat">—</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Longitude</span>
+      <span class="panel-value" id="p-lon">—</span>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
+
+<script>
+
+    let allFlights = []
+    let filterCountry = ""
+
+  // --- CLOCK ---
+  setInterval(() => {
+    document.getElementById('clock').textContent =
+      new Date().toUTCString().replace('GMT', 'UTC')
+  }, 1000)
+
+  // --- MAP ---
+  const map = L.map('map').setView([30, 10], 3)
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO',
+    maxZoom: 18
+  }).addTo(map)
+
+  // --- SVG PLANE ICON (lightweight, no emoji) ---
+  function makePlaneIcon(heading, altitude) {
+    const color = altitudeColor(altitude)
+    return L.divIcon({
+      html: `
+        <svg xmlns="http://www.w3.org/2000/svg"
+             width="20" height="20" viewBox="0 0 24 24"
+             style="transform:rotate(${heading}deg); transform-origin:center;"
+             fill="${color}">
+          <path d="M12 2 L15 9 L22 9 L17 13.5 L19 21 L12 17 L5 21 L7 13.5 L2 9 L9 9 Z"/>
+        </svg>`,
+      className: 'plane-icon',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+      popupAnchor: [0, -10]
+    })
+  }
+
+  function altitudeColor(alt) {
+    if (alt === 0)    return '#aaaaaa'  // on ground
+    if (alt < 3000)   return '#ffd700'  // low — yellow
+    if (alt < 8000)   return '#ff8c00'  // mid — orange
+    return                  '#00bfff'  // cruise — blue
+  }
+
+  // --- CLUSTER STYLE ---
+  function createClusterIcon(cluster) {
+    const count = cluster.getChildCount()
+    const bg     = count < 10 ? '#b8860b' : count < 50 ? '#cc5500' : '#8b0000'
+    const border = count < 10 ? '#ffd700' : count < 50 ? '#ff8c00' : '#ff2200'
+    const size   = count < 10 ? 32 : count < 50 ? 42 : 56
+    return L.divIcon({
+      html: `<div class="custom-cluster" style="
+        width:${size}px; height:${size}px;
+        background:${bg}; border-color:${border};
+        color:#fff; font-size:${size < 40 ? 11 : 13}px;
+        box-shadow:0 0 10px ${border}55;">
+        ${count}
+      </div>`,
+      className: '',
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2]
+    })
+  }
+
+  // --- CLUSTER GROUP ---
+  const clusterGroup = L.markerClusterGroup({
+    iconCreateFunction: createClusterIcon,
+    maxClusterRadius: 60,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true,
+    disableClusteringAtZoom: 7
+  })
+  map.addLayer(clusterGroup)
+
+  // --- STATE ---
+  const markers = {}
+
+
+  function updateStats(flights) {
+  const airborne  = flights.filter(p => !p.on_ground).length
+  const ground    = flights.filter(p => p.on_ground).length
+  const countries = new Set(flights.map(p => p.country)).size
+  const maxSpeed  = Math.max(...flights.map(p => p.speed))
+  const maxAlt    = Math.max(...flights.map(p => p.altitude))
+
+  document.getElementById('stat-total').textContent    = flights.length.toLocaleString()
+  document.getElementById('stat-airborne').textContent = airborne.toLocaleString()
+  document.getElementById('stat-ground').textContent   = ground.toLocaleString()
+  document.getElementById('stat-countries').textContent = countries
+  document.getElementById('stat-maxspeed').textContent = maxSpeed + " km/h"
+  document.getElementById('stat-maxalt').textContent    = maxAlt.toLocaleString() + ' m'
+}
+
+function applyFilters() {
+  filterCountry = document.getElementById('filter-country').value
+
+  clusterGroup.clearLayers()
+
+  const filtered = allFlights.filter(plane => {
+    if (!filterCountry) return true
+    return plane.country === filterCountry
+  })
+
+  const filteredMarkers = []
+
+  filtered.forEach(plane => {
+    if (markers[plane.icao]) {
+      filteredMarkers.push(markers[plane.icao])
+    }
+  })
+
+  clusterGroup.addLayers(filteredMarkers)
+}
+ // --- LOAD FLIGHTS ---
+async function loadFlights() {
+  try {
+    const response = await fetch('http://127.0.0.1:8000/flights')
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    allFlights = data.flights
+
+    updateStats(allFlights)
+
+    const seenIcaos = new Set()
+    const toAdd = []
+    const toRemove = []
+
+    // --- POPULATE COUNTRY FILTER ONCE ---
+    const select = document.getElementById('filter-country')
+
+    if (select.options.length === 1) {
+      const countries = [...new Set(allFlights.map(p => p.country))].sort()
+
+      countries.forEach(country => {
+        const opt = document.createElement('option')
+        opt.value = country
+        opt.textContent = country
+        select.appendChild(opt)
+      })
+    }
+
+    // --- UPDATE / CREATE MARKERS ---
+    allFlights.forEach(plane => {
+
+      seenIcaos.add(plane.icao)
+
+      // UPDATE EXISTING MARKER
+      if (markers[plane.icao]) {
+
+        markers[plane.icao].setLatLng([plane.lat, plane.lon])
+
+        markers[plane.icao].setIcon(
+          makePlaneIcon(plane.heading, plane.altitude)
+        )
+
+      } else {
+
+        // CREATE NEW MARKER
+        const marker = L.marker([plane.lat, plane.lon], {
+          icon: makePlaneIcon(plane.heading, plane.altitude)
+        }).on('click', () => openPanel(plane))
+
+        markers[plane.icao] = marker
+        toAdd.push(marker)
+      }
+    })
+
+    // --- ADD NEW MARKERS ---
+    if (toAdd.length > 0) {
+      clusterGroup.addLayers(toAdd)
+    }
+
+    // --- REMOVE OLD MARKERS ---
+    Object.keys(markers).forEach(icao => {
+
+      if (!seenIcaos.has(icao)) {
+
+        toRemove.push(markers[icao])
+
+        delete markers[icao]
+      }
+    })
+
+    if (toRemove.length > 0) {
+      clusterGroup.removeLayers(toRemove)
+    }
+
+    // --- APPLY ACTIVE FILTERS ---
+    applyFilters()
+
+    // --- UI UPDATES ---
+    document.getElementById('count').textContent =
+      `${data.count.toLocaleString()} aircraft`
+
+    document.title =
+      `Flight Radar — ${data.count} flights`
+
+  } catch (err) {
+
+    console.error('Failed to load flights:', err)
+
+    document.getElementById('count').textContent =
+      '⚠ Backend offline'
+  }
+}
+// --- SIDE PANEL FUNCTIONS ---
+
+function openPanel(plane) {
+
+  document.getElementById('panel-callsign').textContent =
+    plane.callsign || 'Unknown'
+
+  document.getElementById('panel-icao').textContent =
+    plane.icao || 'N/A'
+
+  document.getElementById('p-country').textContent =
+    plane.country || 'Unknown'
+
+  document.getElementById('p-altitude').textContent =
+    plane.altitude.toLocaleString() + ' m'
+
+  document.getElementById('p-speed').textContent =
+    plane.speed + ' km/h'
+
+  document.getElementById('p-heading').textContent =
+    plane.heading + '°'
+
+  document.getElementById('p-lat').textContent =
+    plane.lat.toFixed(4)
+
+  document.getElementById('p-lon').textContent =
+    plane.lon.toFixed(4)
+
+  document.getElementById('p-status').textContent =
+    plane.on_ground ? 'On Ground' : 'Airborne'
+
+  document.getElementById('filters').style.display = 'none'
+
+  // Open panel
+  document.getElementById('panel').classList.add('open')
+}
+
+function closePanel() {
+document.getElementById('filters').style.display = 'block'
+  document.getElementById('panel').classList.remove('open')
+}
+
+  loadFlights()
+  setInterval(loadFlights, 10000)
+
+</script>
+</body>
+</html>
