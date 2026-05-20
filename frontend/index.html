@@ -385,17 +385,26 @@ function updateStats(flights) {
 
 // ---------------- FILTERS ----------------
 function applyFilters() {
+
+  filterCountry =
+    document.getElementById('filter-country').value
+
   clusterGroup.clearLayers()
 
-  const filtered = allFlights.filter(p =>
-    !filterCountry || p.country === filterCountry
-  )
+  const filteredMarkers = []
 
-  const visibleMarkers = filtered
-    .map(p => markers[p.icao])
-    .filter(Boolean)
+  allFlights.forEach(plane => {
 
-  clusterGroup.addLayers(visibleMarkers)
+    const matchesCountry =
+      !filterCountry ||
+      plane.country === filterCountry
+
+    if (matchesCountry && markers[plane.icao]) {
+      filteredMarkers.push(markers[plane.icao])
+    }
+  })
+
+  clusterGroup.addLayers(filteredMarkers)
 }
 
 // ---------------- FETCH ----------------
